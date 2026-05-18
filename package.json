@@ -1,0 +1,13 @@
+{
+  "name": "job-tracker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Full-stack Job Application Tracker — React + Express + MongoDB",
+  "scripts": {
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev:backend": "cd backend && npm run dev",
+    "install:all": "cd frontend && npm install && cd ../backend && npm install",
+    "build:frontend": "cd frontend && npm run build",
+    "build:backend": "cd backend && npm run build"
+  }
+}
