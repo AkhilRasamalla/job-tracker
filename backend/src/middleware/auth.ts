@@ -1,13 +1,15 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 
-// Extend Express Request to include the authenticated user id
 export interface AuthRequest extends Request {
   userId?: string;
 }
 
-// Middleware that verifies the JWT from the Authorization header
-const authMiddleware = (req: AuthRequest, res: Response, next: NextFunction): void => {
+export const authMiddleware = (
+  req: AuthRequest, 
+  res: Response, 
+  next: NextFunction
+) => {
   console.log('[auth] Checking Authorization header');
 
   const authHeader = req.headers.authorization;
