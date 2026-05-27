@@ -9,6 +9,10 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+const allowedOrigins = (process.env.CLIENT_ORIGIN || process.env.CLIENT_URL || 'http://localhost:5173')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 
 // Parse incoming JSON request bodies, including small resume attachments encoded by the frontend
 app.use(express.json({ limit: '5mb' }));
@@ -16,7 +20,13 @@ app.use(express.json({ limit: '5mb' }));
 // Enable CORS for frontend origin
 app.use(
   cors({
-    origin: process.env.CLIENT_ORIGIN || 'http://localhost:5173',
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+        return;
+      }
+      callback(new Error(`CORS blocked origin: ${origin}`));
+    },
     credentials: true,
   })
 );

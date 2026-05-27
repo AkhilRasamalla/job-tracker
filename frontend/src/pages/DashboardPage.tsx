@@ -1,8 +1,11 @@
 import { useMemo } from 'react';
 import { useApplications } from '../hooks';
+import { useAuthStore } from '../store';
 import { StatusCard, StatusBarChart, LoadingSpinner, ErrorMessage } from '../components';
 import { 
+  AlertCircle,
   Briefcase, 
+  CalendarClock,
   Send, 
   Search, 
   MessageSquare, 
@@ -14,6 +17,7 @@ import {
 
 const DashboardPage = () => {
   const { data: applications, isLoading, isError } = useApplications();
+  const user = useAuthStore((state) => state.user);
 
   const stats = useMemo(() => {
     if (!applications) return null;
@@ -27,13 +31,23 @@ const DashboardPage = () => {
       Rejected: 0,
       Withdrawn: 0,
       Total: applications.length,
-      Resumes: 0
+      Resumes: 0,
+      FollowUpsDue: 0,
+      HighPriority: 0
     };
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
     applications.forEach(app => {
       counts[app.status]++;
       if (app.resume) {
         counts.Resumes++;
+      }
+      if (app.priority === 'High') {
+        counts.HighPriority++;
+      }
+      if (app.followUpDate && new Date(app.followUpDate) <= today) {
+        counts.FollowUpsDue++;
       }
     });
 
@@ -46,7 +60,17 @@ const DashboardPage = () => {
       { name: 'Rejected', count: counts.Rejected, fill: '#f87171' }, // red-400
     ];
 
-    return { counts, chartData };
+    const upcomingFollowUps = applications
+      .filter((app) => app.followUpDate)
+      .sort((a, b) => new Date(a.followUpDate!).getTime() - new Date(b.followUpDate!).getTime())
+      .slice(0, 5);
+
+    const highPriority = applications
+      .filter((app) => app.priority === 'High')
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+      .slice(0, 5);
+
+    return { counts, chartData, upcomingFollowUps, highPriority };
   }, [applications]);
 
   if (isLoading) {
@@ -69,7 +93,7 @@ const DashboardPage = () => {
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
         <p className="text-sm text-gray-500 mt-1">
-          Overview of your job search progress
+          {user ? `Signed in as ${user.name} (${user.email})` : 'Overview of your job search progress'}
         </p>
       </div>
 
@@ -96,11 +120,11 @@ const DashboardPage = () => {
           bgClass="bg-green-50"
         />
         <StatusCard
-          title="Resumes Saved"
-          count={stats.counts.Resumes}
-          icon={FileText}
-          colorClass="text-indigo-600"
-          bgClass="bg-indigo-50"
+          title="Follow-ups Due"
+          count={stats.counts.FollowUpsDue}
+          icon={CalendarClock}
+          colorClass="text-red-600"
+          bgClass="bg-red-50"
         />
       </div>
 
@@ -142,12 +166,70 @@ const DashboardPage = () => {
             </div>
             <div className="flex justify-between items-center py-2 border-b border-gray-50">
               <div className="flex items-center text-gray-600">
+                <AlertCircle className="w-4 h-4 mr-2 text-rose-500" />
+                <span>High Priority</span>
+              </div>
+              <span className="font-semibold text-gray-900">{stats.counts.HighPriority}</span>
+            </div>
+            <div className="flex justify-between items-center py-2 border-b border-gray-50">
+              <div className="flex items-center text-gray-600">
+                <FileText className="w-4 h-4 mr-2 text-indigo-500" />
+                <span>Resumes Saved</span>
+              </div>
+              <span className="font-semibold text-gray-900">{stats.counts.Resumes}</span>
+            </div>
+            <div className="flex justify-between items-center py-2">
+              <div className="flex items-center text-gray-600">
                 <MinusCircle className="w-4 h-4 mr-2 text-gray-400" />
                 <span>Withdrawn</span>
               </div>
               <span className="font-semibold text-gray-900">{stats.counts.Withdrawn}</span>
             </div>
           </div>
+        </div>
+      </div>
+
+      <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Next Follow-ups</h3>
+          {stats.upcomingFollowUps.length > 0 ? (
+            <div className="space-y-3">
+              {stats.upcomingFollowUps.map((app) => (
+                <div key={app._id} className="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-gray-900">{app.company}</p>
+                    <p className="truncate text-xs text-gray-500">{app.role}</p>
+                  </div>
+                  <span className="ml-3 shrink-0 text-sm font-semibold text-gray-700">
+                    {new Date(app.followUpDate!).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500">No follow-up dates set yet.</p>
+          )}
+        </div>
+
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">High Priority Targets</h3>
+          {stats.highPriority.length > 0 ? (
+            <div className="space-y-3">
+              {stats.highPriority.map((app) => (
+                <div key={app._id} className="flex items-center justify-between rounded-lg bg-rose-50 px-3 py-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-gray-900">{app.company}</p>
+                    <p className="truncate text-xs text-gray-500">{app.status} - {app.role}</p>
+                  </div>
+                  <span className="ml-3 shrink-0 rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-rose-700">
+                    High
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500">Mark important applications as high priority to track them here.</p>
+          )}
         </div>
       </div>
     </div>

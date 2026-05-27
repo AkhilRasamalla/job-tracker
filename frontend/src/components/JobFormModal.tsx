@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { FileText, Trash2, Upload, X } from 'lucide-react';
-import { JobApplication, ApplicationPayload, ApplicationStatus, ResumeAttachment } from '../types';
+import { JobApplication, ApplicationPayload, ApplicationPriority, ApplicationStatus, ResumeAttachment } from '../types';
 
 interface JobFormModalProps {
   isOpen: boolean;
@@ -8,13 +8,17 @@ interface JobFormModalProps {
   onSubmit: (payload: Partial<ApplicationPayload>) => void;
   application: JobApplication | null;
   isLoading: boolean;
+  error?: string;
 }
 
 const statuses: ApplicationStatus[] = [
   'Wishlist', 'Applied', 'Screening', 'Interview', 'Offer', 'Rejected', 'Withdrawn'
 ];
 
+const priorities: ApplicationPriority[] = ['Low', 'Medium', 'High'];
 const MAX_RESUME_SIZE = 2 * 1024 * 1024;
+const MAX_NOTES_LENGTH = 20000;
+const MAX_JOB_DESCRIPTION_LENGTH = 30000;
 const resumeTypes = [
   'application/pdf',
   'application/msword',
@@ -32,7 +36,8 @@ const JobFormModal: React.FC<JobFormModalProps> = ({
   onClose,
   onSubmit,
   application,
-  isLoading
+  isLoading,
+  error
 }) => {
   const [formData, setFormData] = useState<Partial<ApplicationPayload>>({
     company: '',
@@ -42,6 +47,12 @@ const JobFormModal: React.FC<JobFormModalProps> = ({
     jobUrl: '',
     salary: '',
     location: '',
+    priority: 'Medium',
+    source: '',
+    contactName: '',
+    contactEmail: '',
+    followUpDate: '',
+    jobDescription: '',
     resume: undefined,
     notes: '',
   });
@@ -57,6 +68,14 @@ const JobFormModal: React.FC<JobFormModalProps> = ({
         jobUrl: application.jobUrl || '',
         salary: application.salary || '',
         location: application.location || '',
+        priority: application.priority || 'Medium',
+        source: application.source || '',
+        contactName: application.contactName || '',
+        contactEmail: application.contactEmail || '',
+        followUpDate: application.followUpDate
+          ? new Date(application.followUpDate).toISOString().split('T')[0]
+          : '',
+        jobDescription: application.jobDescription || '',
         resume: application.resume,
         notes: application.notes || '',
       });
@@ -69,6 +88,12 @@ const JobFormModal: React.FC<JobFormModalProps> = ({
         jobUrl: '',
         salary: '',
         location: '',
+        priority: 'Medium',
+        source: '',
+        contactName: '',
+        contactEmail: '',
+        followUpDate: '',
+        jobDescription: '',
         resume: undefined,
         notes: '',
       });
@@ -232,6 +257,69 @@ const JobFormModal: React.FC<JobFormModalProps> = ({
               />
             </div>
 
+            <div className="grid grid-cols-2 gap-5">
+              <div className="col-span-2 sm:col-span-1">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Priority</label>
+                <select
+                  name="priority"
+                  value={formData.priority}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-shadow bg-white"
+                >
+                  {priorities.map((priority) => (
+                    <option key={priority} value={priority}>{priority}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="col-span-2 sm:col-span-1">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Follow-up Date</label>
+                <input
+                  type="date"
+                  name="followUpDate"
+                  value={formData.followUpDate || ''}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-shadow"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-5">
+              <div className="col-span-2 sm:col-span-1">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Source</label>
+                <input
+                  type="text"
+                  name="source"
+                  value={formData.source || ''}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-shadow"
+                  placeholder="LinkedIn, referral, company site"
+                />
+              </div>
+              <div className="col-span-2 sm:col-span-1">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Contact Name</label>
+                <input
+                  type="text"
+                  name="contactName"
+                  value={formData.contactName || ''}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-shadow"
+                  placeholder="Recruiter or referral"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Contact Email</label>
+              <input
+                type="email"
+                name="contactEmail"
+                value={formData.contactEmail || ''}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-shadow"
+                placeholder="recruiter@company.com"
+              />
+            </div>
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Resume Used</label>
               <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-4">
@@ -273,19 +361,44 @@ const JobFormModal: React.FC<JobFormModalProps> = ({
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Your Notes</label>
               <textarea
                 name="notes"
                 value={formData.notes}
                 onChange={handleChange}
+                maxLength={MAX_NOTES_LENGTH}
                 rows={3}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-shadow resize-none"
-                placeholder="Any additional details..."
+                placeholder="Follow-up thoughts, interview prep, salary notes..."
               />
+              <p className="mt-1 text-right text-xs text-gray-400">
+                {(formData.notes || '').length}/{MAX_NOTES_LENGTH}
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Job Description</label>
+              <textarea
+                name="jobDescription"
+                value={formData.jobDescription || ''}
+                onChange={handleChange}
+                maxLength={MAX_JOB_DESCRIPTION_LENGTH}
+                rows={5}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-shadow resize-y"
+                placeholder="Paste the job post here so you can tailor your resume/interview prep later."
+              />
+              <p className="mt-1 text-right text-xs text-gray-400">
+                {(formData.jobDescription || '').length}/{MAX_JOB_DESCRIPTION_LENGTH}
+              </p>
             </div>
           </div>
 
           <div className="mt-8 flex justify-end gap-3">
+            {error && (
+              <div className="mr-auto rounded-lg bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
+                {error}
+              </div>
+            )}
             <button
               type="button"
               onClick={onClose}

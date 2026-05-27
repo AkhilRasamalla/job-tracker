@@ -1,12 +1,38 @@
 import React from 'react';
-import { Briefcase, Building2, Calendar, MapPin, DollarSign, MoreVertical, Edit, Trash2, FileText, Download } from 'lucide-react';
+import {
+  AlertCircle,
+  Briefcase,
+  Building2,
+  Calendar,
+  Clock,
+  DollarSign,
+  Download,
+  Edit,
+  FileText,
+  Mail,
+  MapPin,
+  MoreVertical,
+  Trash2,
+  UserRound,
+} from 'lucide-react';
 import { JobApplication, ApplicationStatus } from '../types';
 
 interface JobCardProps {
   application: JobApplication;
   onEdit: (application: JobApplication) => void;
   onDelete: (id: string) => void;
+  onStatusChange: (application: JobApplication, status: ApplicationStatus) => void;
 }
+
+const statuses: ApplicationStatus[] = [
+  'Wishlist',
+  'Applied',
+  'Screening',
+  'Interview',
+  'Offer',
+  'Rejected',
+  'Withdrawn',
+];
 
 const statusColors: Record<ApplicationStatus, string> = {
   Wishlist: 'bg-gray-100 text-gray-800 border-gray-200',
@@ -18,7 +44,13 @@ const statusColors: Record<ApplicationStatus, string> = {
   Withdrawn: 'bg-gray-200 text-gray-600 border-gray-300',
 };
 
-const JobCard: React.FC<JobCardProps> = ({ application, onEdit, onDelete }) => {
+const priorityColors = {
+  Low: 'bg-gray-50 text-gray-600 border-gray-200',
+  Medium: 'bg-amber-50 text-amber-700 border-amber-200',
+  High: 'bg-rose-50 text-rose-700 border-rose-200',
+};
+
+const JobCard: React.FC<JobCardProps> = ({ application, onEdit, onDelete, onStatusChange }) => {
   const formattedDate = new Date(application.dateApplied).toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
@@ -29,6 +61,16 @@ const JobCard: React.FC<JobCardProps> = ({ application, onEdit, onDelete }) => {
       ? `${Math.round(application.resume.fileSize / 1024)} KB`
       : `${(application.resume.fileSize / (1024 * 1024)).toFixed(1)} MB`
     : null;
+  const followUpDate = application.followUpDate ? new Date(application.followUpDate) : null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const followUpLabel = followUpDate
+    ? followUpDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    : null;
+  const isFollowUpOverdue = followUpDate ? followUpDate < today : false;
+  const isFollowUpToday = followUpDate ? followUpDate.getTime() === today.getTime() : false;
+  const priority = application.priority || 'Medium';
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 hover:shadow-md transition-shadow duration-200 group relative">
@@ -44,9 +86,16 @@ const JobCard: React.FC<JobCardProps> = ({ application, onEdit, onDelete }) => {
         </div>
         
         <div className="flex items-center gap-2 ml-4">
-          <span className={`px-2.5 py-1 rounded-full text-xs font-medium border ${statusColors[application.status]}`}>
-            {application.status}
-          </span>
+          <select
+            value={application.status}
+            onChange={(event) => onStatusChange(application, event.target.value as ApplicationStatus)}
+            className={`max-w-[8.5rem] rounded-full border px-2.5 py-1 text-xs font-medium outline-none ${statusColors[application.status]}`}
+            aria-label="Update application status"
+          >
+            {statuses.map((status) => (
+              <option key={status} value={status}>{status}</option>
+            ))}
+          </select>
           <div className="relative group/menu">
             <button className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors">
               <MoreVertical className="w-5 h-5" />
@@ -100,11 +149,64 @@ const JobCard: React.FC<JobCardProps> = ({ application, onEdit, onDelete }) => {
             </a>
           </div>
         )}
+        {application.source && (
+          <div className="flex items-center">
+            <Briefcase className="w-4 h-4 mr-2 text-gray-400 flex-shrink-0" />
+            <span className="truncate">{application.source}</span>
+          </div>
+        )}
+        {application.contactName && (
+          <div className="flex items-center">
+            <UserRound className="w-4 h-4 mr-2 text-gray-400 flex-shrink-0" />
+            <span className="truncate">{application.contactName}</span>
+          </div>
+        )}
+        {application.contactEmail && (
+          <div className="flex items-center">
+            <Mail className="w-4 h-4 mr-2 text-gray-400 flex-shrink-0" />
+            <a
+              href={`mailto:${application.contactEmail}`}
+              className="text-blue-500 hover:text-blue-700 hover:underline truncate"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {application.contactEmail}
+            </a>
+          </div>
+        )}
+      </div>
+
+      <div className="mb-4 flex flex-wrap gap-2">
+        <span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${priorityColors[priority]}`}>
+          {priority} priority
+        </span>
+        {followUpLabel && (
+          <span
+            className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${
+              isFollowUpOverdue || isFollowUpToday
+                ? 'border-red-200 bg-red-50 text-red-700'
+                : 'border-emerald-200 bg-emerald-50 text-emerald-700'
+            }`}
+          >
+            {isFollowUpOverdue || isFollowUpToday ? (
+              <AlertCircle className="mr-1 h-3.5 w-3.5" />
+            ) : (
+              <Clock className="mr-1 h-3.5 w-3.5" />
+            )}
+            {isFollowUpOverdue ? 'Follow up overdue' : isFollowUpToday ? 'Follow up today' : `Follow up ${followUpLabel}`}
+          </span>
+        )}
       </div>
 
       {application.notes && (
         <div className="mt-4 pt-4 border-t border-gray-100">
           <p className="text-sm text-gray-600 line-clamp-2">{application.notes}</p>
+        </div>
+      )}
+
+      {application.jobDescription && (
+        <div className="mt-4 pt-4 border-t border-gray-100">
+          <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Job description</p>
+          <p className="mt-1 text-sm text-gray-600 line-clamp-3">{application.jobDescription}</p>
         </div>
       )}
 

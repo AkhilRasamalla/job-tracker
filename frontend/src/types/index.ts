@@ -10,6 +10,13 @@ export type ApplicationStatus =
   | 'Rejected'
   | 'Withdrawn';
 
+export type ApplicationPriority = 'Low' | 'Medium' | 'High';
+
+export interface StatusHistoryEntry {
+  status: ApplicationStatus;
+  changedAt: string;
+}
+
 export interface ResumeAttachment {
   fileName: string;
   fileType: string;
@@ -29,6 +36,13 @@ export interface JobApplication {
   jobUrl?: string;
   salary?: string;
   location?: string;
+  priority?: ApplicationPriority;
+  source?: string;
+  contactName?: string;
+  contactEmail?: string;
+  followUpDate?: string;
+  jobDescription?: string;
+  statusHistory?: StatusHistoryEntry[];
   resume?: ResumeAttachment | null;
   notes?: string;
   createdAt: string;
@@ -43,10 +57,10 @@ export type ApplicationPayload = Omit<
 
 // Shape of a registered user
 export interface User {
-  _id: string;
+  id: string;
   name: string;
   email: string;
-  createdAt: string;
+  createdAt?: string;
 }
 
 // Auth response returned by login / register

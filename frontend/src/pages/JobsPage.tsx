@@ -1,12 +1,13 @@
 import { useState, useMemo } from 'react';
-import { Plus } from 'lucide-react';
+import { ArrowUpDown, Plus, Search } from 'lucide-react';
+import axios from 'axios';
 import { 
   useApplications, 
   useCreateApplication, 
   useUpdateApplication, 
   useDeleteApplication 
 } from '../hooks';
-import { JobApplication, ApplicationPayload } from '../types';
+import { ApplicationStatus, JobApplication, ApplicationPayload } from '../types';
 import { JobCard, JobFormModal, DeleteConfirmModal, StatusFilter, LoadingSpinner, ErrorMessage } from '../components';
 import { useFilterStore } from '../store';
 
@@ -21,14 +22,29 @@ const JobsPage = () => {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [selectedApplication, setSelectedApplication] = useState<JobApplication | null>(null);
   const [applicationToDelete, setApplicationToDelete] = useState<string | null>(null);
+  const [saveMessage, setSaveMessage] = useState('');
+  const [formError, setFormError] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState('updated');
+
+  const getErrorMessage = (err: unknown) => {
+    if (axios.isAxiosError<{ message?: string }>(err)) {
+      return err.response?.data?.message || err.message || 'Request failed';
+    }
+    return err instanceof Error ? err.message : 'Something went wrong';
+  };
 
   const handleOpenAdd = () => {
     setSelectedApplication(null);
+    setFormError('');
+    setSaveMessage('');
     setIsFormModalOpen(true);
   };
 
   const handleOpenEdit = (application: JobApplication) => {
     setSelectedApplication(application);
+    setFormError('');
+    setSaveMessage('');
     setIsFormModalOpen(true);
   };
 
@@ -48,26 +64,91 @@ const JobsPage = () => {
   };
 
   const handleFormSubmit = async (payload: Partial<ApplicationPayload>) => {
-    if (selectedApplication) {
-      await updateMutation.mutateAsync({ id: selectedApplication._id, payload });
-    } else {
-      await createMutation.mutateAsync(payload as ApplicationPayload);
+    setFormError('');
+    setSaveMessage('');
+
+    try {
+      if (selectedApplication) {
+        await updateMutation.mutateAsync({ id: selectedApplication._id, payload });
+        setSaveMessage('Application updated successfully.');
+      } else {
+        await createMutation.mutateAsync(payload as ApplicationPayload);
+        setSaveMessage('Application saved successfully.');
+      }
+      handleCloseForm();
+    } catch (err) {
+      setFormError(getErrorMessage(err));
     }
-    handleCloseForm();
   };
 
   const handleDeleteConfirm = async () => {
     if (applicationToDelete) {
-      await deleteMutation.mutateAsync(applicationToDelete);
-      handleCloseDelete();
+      try {
+        await deleteMutation.mutateAsync(applicationToDelete);
+        setSaveMessage('Application deleted successfully.');
+        handleCloseDelete();
+      } catch (err) {
+        setSaveMessage(`Delete failed: ${getErrorMessage(err)}`);
+      }
+    }
+  };
+
+  const handleStatusChange = async (application: JobApplication, status: ApplicationStatus) => {
+    if (application.status === status) return;
+
+    try {
+      await updateMutation.mutateAsync({ id: application._id, payload: { status } });
+      setSaveMessage(`Moved ${application.company} to ${status}.`);
+    } catch (err) {
+      setSaveMessage(`Status update failed: ${getErrorMessage(err)}`);
     }
   };
 
   const filteredApplications = useMemo(() => {
     if (!applications) return [];
-    if (statusFilter === 'All') return applications;
-    return applications.filter((app) => app.status === statusFilter);
-  }, [applications, statusFilter]);
+    const query = searchQuery.trim().toLowerCase();
+    const priorityScore = { High: 3, Medium: 2, Low: 1 };
+
+    return applications
+      .filter((app) => {
+        if (statusFilter !== 'All' && app.status !== statusFilter) return false;
+        if (!query) return true;
+
+        return [
+          app.company,
+          app.role,
+          app.location,
+          app.salary,
+          app.source,
+          app.contactName,
+          app.contactEmail,
+          app.notes,
+          app.jobDescription,
+        ]
+          .filter(Boolean)
+          .some((value) => value!.toLowerCase().includes(query));
+      })
+      .sort((a, b) => {
+        if (sortBy === 'followUp') {
+          const aTime = a.followUpDate ? new Date(a.followUpDate).getTime() : Number.MAX_SAFE_INTEGER;
+          const bTime = b.followUpDate ? new Date(b.followUpDate).getTime() : Number.MAX_SAFE_INTEGER;
+          return aTime - bTime;
+        }
+
+        if (sortBy === 'priority') {
+          return (priorityScore[b.priority || 'Medium'] || 0) - (priorityScore[a.priority || 'Medium'] || 0);
+        }
+
+        if (sortBy === 'dateApplied') {
+          return new Date(b.dateApplied).getTime() - new Date(a.dateApplied).getTime();
+        }
+
+        return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+      });
+  }, [applications, searchQuery, sortBy, statusFilter]);
+
+  const visibleCount = filteredApplications.length;
+  const totalCount = applications?.length || 0;
 
   const isMutating = createMutation.isPending || updateMutation.isPending;
 
@@ -91,6 +172,41 @@ const JobsPage = () => {
 
       <StatusFilter />
 
+      <div className="mb-6 grid grid-cols-1 gap-3 rounded-xl border border-gray-100 bg-white p-3 shadow-sm md:grid-cols-[1fr_auto_auto]">
+        <label className="relative block">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            className="w-full rounded-lg border border-gray-200 py-2 pl-9 pr-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            placeholder="Search company, role, notes, contacts, or job description"
+          />
+        </label>
+        <label className="relative block min-w-48">
+          <ArrowUpDown className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+          <select
+            value={sortBy}
+            onChange={(event) => setSortBy(event.target.value)}
+            className="w-full appearance-none rounded-lg border border-gray-200 bg-white py-2 pl-9 pr-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+          >
+            <option value="updated">Recently updated</option>
+            <option value="followUp">Follow-up date</option>
+            <option value="priority">Priority</option>
+            <option value="dateApplied">Date applied</option>
+          </select>
+        </label>
+        <div className="flex items-center rounded-lg bg-gray-50 px-3 text-sm font-medium text-gray-600">
+          {visibleCount} of {totalCount}
+        </div>
+      </div>
+
+      {saveMessage && (
+        <div className="mb-6 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm font-medium text-blue-800">
+          {saveMessage}
+        </div>
+      )}
+
       {isLoading ? (
         <div className="py-20 flex justify-center">
           <LoadingSpinner size="lg" />
@@ -108,6 +224,7 @@ const JobsPage = () => {
               application={app}
               onEdit={handleOpenEdit}
               onDelete={handleOpenDelete}
+              onStatusChange={handleStatusChange}
             />
           ))}
         </div>
@@ -144,6 +261,7 @@ const JobsPage = () => {
         onSubmit={handleFormSubmit}
         application={selectedApplication}
         isLoading={isMutating}
+        error={formError}
       />
 
       <DeleteConfirmModal

@@ -10,6 +10,8 @@ export type ApplicationStatus =
   | 'Rejected'
   | 'Withdrawn';
 
+export type ApplicationPriority = 'Low' | 'Medium' | 'High';
+
 // Interface for the Application document
 export interface IApplication extends Document {
   user: Types.ObjectId;
@@ -20,6 +22,16 @@ export interface IApplication extends Document {
   jobUrl?: string;
   salary?: string;
   location?: string;
+  priority?: ApplicationPriority;
+  source?: string;
+  contactName?: string;
+  contactEmail?: string;
+  followUpDate?: Date;
+  jobDescription?: string;
+  statusHistory?: {
+    status: ApplicationStatus;
+    changedAt: Date;
+  }[];
   resume?: {
     fileName: string;
     fileType: string;
@@ -74,6 +86,49 @@ const ApplicationSchema = new Schema<IApplication>(
       type: String,
       trim: true,
     },
+    priority: {
+      type: String,
+      enum: ['Low', 'Medium', 'High'],
+      default: 'Medium',
+    },
+    source: {
+      type: String,
+      trim: true,
+      maxlength: [120, 'Source cannot exceed 120 characters'],
+    },
+    contactName: {
+      type: String,
+      trim: true,
+      maxlength: [120, 'Contact name cannot exceed 120 characters'],
+    },
+    contactEmail: {
+      type: String,
+      trim: true,
+      lowercase: true,
+      maxlength: [160, 'Contact email cannot exceed 160 characters'],
+    },
+    followUpDate: {
+      type: Date,
+    },
+    jobDescription: {
+      type: String,
+      trim: true,
+      maxlength: [30000, 'Job description cannot exceed 30000 characters'],
+    },
+    statusHistory: [
+      {
+        status: {
+          type: String,
+          enum: ['Wishlist', 'Applied', 'Screening', 'Interview', 'Offer', 'Rejected', 'Withdrawn'],
+          required: true,
+        },
+        changedAt: {
+          type: Date,
+          default: Date.now,
+        },
+        _id: false,
+      },
+    ],
     resume: {
       fileName: {
         type: String,
@@ -97,7 +152,7 @@ const ApplicationSchema = new Schema<IApplication>(
     notes: {
       type: String,
       trim: true,
-      maxlength: [2000, 'Notes cannot exceed 2000 characters'],
+      maxlength: [20000, 'Notes cannot exceed 20000 characters'],
     },
   },
   {
